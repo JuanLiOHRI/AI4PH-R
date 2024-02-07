@@ -29,4 +29,4 @@ Demo and assignment materials for the AI4PH course: Developing and Deploying Tra
 ## Assignment submission and office hour
 To submit your work on the assignment, please send us the assignment file with your code and all the output, you can find our emails on [Canvas](https://phesc.instructure.com/courses/234/users). Please rename the file as `AI4PH_assignment_YourName.Rmd`. E.g. my name is Juan Li and I will rename my submission as `AI4PH_assignment_JuanLi.Rmd`.
 
-If you have any question or difficulties, you are encouraged to join the office hour on Feburary 19th.
+If you have any question, you are encouraged to join the office hour on Feburary 19th.
