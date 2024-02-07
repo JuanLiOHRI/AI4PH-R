@@ -1,0 +1,184 @@
+---
+title: "Assignment for AI4PH - Developing and Deploying Transparent and Reproducible Algorithms for Public Health"
+output:  
+  bookdown::html_document2:
+    toc: true
+    number_sections: true
+    toc_float: true
+    fig_caption: yes
+    global_numbering: true 
+---
+
+# Introduction
+
+In this assignment, you will validate the `stroke` model we developed in class using a different dataset: `valid_data.rds`. You will run into issues using this dataset as it is because this is a raw dataset without data harmonization, which means that some variables in this dataset are different from the harmonized dataset we used to train and evaluate the model. Your job here is to harmonize the validation data so that it's in the same format as the example data we used in class. You can refer to `train_data_variables.csv` to see the format in the harmonized train data.
+
+# Load useful packages
+
+```{r, message=FALSE, results='hide'}
+# data manipulation and building and validating models
+library(tidyverse)
+
+# models building and evaluation
+library(tidymodels)
+
+# model implementation
+library(plumber)
+```
+
+# Load data
+
+For this validation, we'll use a different and uncurated subset of the `stroke` dataset. We first take a look at the data and you'll see that it isn't in the same format as shown in `train_data_variables.csv`.
+
+```{r}
+# load the data
+valid_data <- readRDS("valid_data.rds")
+```
+
+```{r}
+# show sample size and number of predictors
+dim(valid_data)
+```
+
+```{r}
+# show the first 6 rows
+head(valid_data) 
+```
+
+```{r}
+# show some information about the dataset
+str(valid_data)
+```
+
+```{r}
+# show the summary information about the dataset
+summary(valid_data)
+```
+
+# Try the saved model/workflow on the validation data as it is
+
+It is expected to have some errors.
+
+```{r}
+# read in the saved workflow object
+workflow <- readRDS("stroke_lr_workflow.rds")
+```
+
+```{r}
+# predict on the validation data
+prediction_class <- workflow %>% 
+  predict(new_data = valid_data,
+          type = 'class')
+```
+
+# Harmonize the validation data - add your harmonization steps in the below cell
+
+Compare the data dictionary of the train data (`train_data_variables.csv`) with the summary info of the validation data, complete the data harmonization below.
+
+```{r}
+# make a copy of the valid data
+harmonized_valid_data <- valid_data
+
+# Add your harmonization steps here
+
+```
+
+```{r}
+# check and make sure the variables are now in the correct format.
+summary(harmonized_valid_data)
+```
+
+## verify that now the workflow works on the harmonized validation data
+
+```{r}
+prediction_class <- workflow %>% 
+  predict(new_data = harmonized_valid_data,
+          type = 'class')
+
+head(prediction_class)
+```
+
+```{r}
+prediction_prob <- workflow %>% 
+  predict(new_data = harmonized_valid_data,
+          type = 'prob')
+
+head(prediction_prob)
+```
+
+```{r}
+# Combine test data with predictions
+pred_results <- harmonized_valid_data %>% 
+  bind_cols(prediction_class, prediction_prob)
+
+head(pred_results %>% select(stroke, `.pred_class`, `.pred_0`, `.pred_1`))
+```
+
+```{r}
+# model performance on the harmonized validation data set
+custom_metrics <- metric_set(sens, spec, roc_auc)
+
+custom_metrics(pred_results, truth = stroke, estimate = .pred_class, .pred_0)
+
+pred_results %>% roc_curve(stroke, .pred_0) %>% autoplot()
+```
+
+
+## Save the harmonized data set
+
+```{r}
+saveRDS(harmonized_valid_data, "harmonized_valid_data.rds")
+```
+
+# Implement the model using `plumber`
+
+[`Plumber`](https://www.rplumber.io/) allows you to create a web API by merely decorating your existing R source code with roxygen2-like comments.
+
+To run `plumber`, you will need a separate `.R` file.
+
+```{r}
+# 'stroke_lr_plumber.R' is the location of the file shown above
+pr("stroke_lr_plumber.R") %>%
+  pr_run(port=8000)
+```
+
+To test the website you generated, input the below examples, and check the output:
+
+```{r}
+# Example 1
+ind <- 1
+
+t(pred_results[ind, 1:10])
+
+cat(paste("===============", "\n"))
+cat(paste("The observed class:", pred_results$.pred_class[ind], "\n"))
+cat(paste("The expected predicted class:", pred_results$.pred_class[ind], "\n"))
+cat(paste("The expected probability for class 0:", round(pred_results$.pred_0[ind], 3), "\n"))
+cat(paste("The expected probability for class 1:", round(pred_results$.pred_1[ind], 3)))
+```
+
+```{r}
+# Example 2
+ind <- 100
+
+t(pred_results[ind, 1:10])
+
+cat(paste("===============", "\n"))
+cat(paste("The observed class:", pred_results$.pred_class[ind], "\n"))
+cat(paste("The expected predicted class:", pred_results$.pred_class[ind], "\n"))
+cat(paste("The expected probability for class 0:", round(pred_results$.pred_0[ind], 3), "\n"))
+cat(paste("The expected probability for class 1:", round(pred_results$.pred_1[ind], 3)))
+```
+
+```{r}
+# Example 3
+ind <- 465
+
+t(pred_results[ind, 1:10])
+
+cat(paste("===============", "\n"))
+cat(paste("The observed class:", pred_results$.pred_class[ind], "\n"))
+cat(paste("The expected predicted class:", pred_results$.pred_class[ind], "\n"))
+cat(paste("The expected probability for class 0:", round(pred_results$.pred_0[ind], 3), "\n"))
+cat(paste("The expected probability for class 1:", round(pred_results$.pred_1[ind], 3)))
+```

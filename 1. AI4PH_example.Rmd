@@ -1,0 +1,281 @@
+---
+title: "Examples of using Tidymodels and plumber - logistic regression"
+author: "Juan Li"
+date: "2023-12-19"
+output:  
+  bookdown::html_document2:
+    toc: true
+    number_sections: true
+    toc_float: true
+    fig_caption: yes
+    global_numbering: true 
+---
+
+# Introduction
+
+This demo is made for the AI4PH course *"Developing and Deploying Transparent and Reproducible Algorithms for Public Health"*. We will demonstrate the whole workflow of building and evaluating a simple classification model using `tidymodels`, and implementing it using `plumber`.
+
+# Load useful packages
+
+```{r, message=FALSE, results='hide'}
+# data manipulation and building and validating models
+library(tidyverse)
+
+# models building and evaluation
+library(tidymodels)
+
+# model implementation
+library(plumber)
+```
+
+For reproducibility, see the random seed. The same seed will be used throughout the demo.
+
+```{r, message=FALSE}
+seed <- 10
+```
+
+# Load data
+
+For this example, we'll use a curated subset of the `stroke` dataset.
+
+```{r}
+# load the data
+data <- readRDS("train_data.rds")
+```
+
+```{r}
+# show sample size and number of predictors
+dim(data)
+```
+
+```{r}
+# show the first 6 rows
+head(data) 
+```
+
+```{r}
+# show some information about the dataset
+str(data)
+```
+
+```{r}
+# show the summary information about the dataset
+# you can also check the data dictionary for more information
+summary(data)
+```
+
+# A complete modelling workflow using logistic regression (lr)
+
+## Data resampling with `initial_split()`
+
+For reference, check the [`rsample`](https://rsample.tidymodels.org/) package, which supports data resampling, and is used for creating random subsets of a dataset for different activities in the modeling process.
+
+```{r, message=FALSE}
+set.seed(seed) # set seed for reproducibility
+
+# split the data into train and test datasets
+stroke_split <- initial_split(data, prop = 0.8, strata = stroke)
+stroke_train <- stroke_split %>% training()  # retrieve train data
+stroke_test  <- stroke_split %>% testing()   # retrieve test data
+```
+
+## Model specification with `parsnip`.
+
+For reference, check the [`parsnip`](https://parsnip.tidymodels.org/) package, which is an interface to the vast modeling libraries available in R. It is used for specifying and fitting models as well as obtaining model predictions.
+
+```{r, message=FALSE}
+# Initialize a logistic regression object
+lr_spec <- logistic_reg() %>% 
+  # Set the model engine
+  set_engine('glm') %>% 
+  # Set the model mode
+  set_mode('classification')
+```
+
+## Data preprocessing with `recipes`
+
+For reference, check the [`recipes`](https://recipes.tidymodels.org/) package, which contains functions for transforming data for modeling. This step is often called feature engineering.
+
+From the output of `summary(data)`, we can see that all variables are in the correct format and there is no missing data. And for logistic regression model, all categorical predictors should be converted to dummy variables, and all numeric predictors need to be centered and scaled (especially so if you are using penalized logistic regression, also known as shrinkage or regularization).
+
+-   `step_dummy()` converts characters or factors (i.e., nominal variables) into one or more numeric binary model terms for the levels of the original data.
+
+-   `step_normalize()` centers and scales numeric variables.
+
+Note the order of steps.
+
+```{r, message=FALSE}
+# Define the data preprocessing recipes
+lr_recipe <- 
+  # define the formula
+  recipe(stroke ~ ., data = stroke_train) %>% 
+  # create dummy variables for all the categorical predictors
+  step_dummy(all_nominal_predictors()) %>% 
+  # center and scale all numeric variables
+  step_normalize(all_predictors())
+```
+
+## Create the workflow with `workflows`
+
+For reference, check the [`workflows`](https://workflows.tidymodels.org/) package, which is an object that can bundle together your pre-processing, modeling, and post-processing requests. For example, if you have a recipe and parsnip model, these can be combined into a workflow.
+
+```{r, message=FALSE}
+# Define the workflow
+lr_workflow <- 
+  workflow() %>% 
+  add_model(lr_spec) %>% 
+  add_recipe(lr_recipe)
+```
+
+## Train the model
+
+For logistic regression, there is no need for hyperparameter tuning. Just train the model on the whole train data.
+
+```{r, message=FALSE}
+# Train the model with preprocessing steps
+lr_workflow_fit <- lr_workflow %>% 
+  fit(data = stroke_train)
+```
+
+## Obtaining the estimated coefficients using `broom`
+
+For reference, check the [`broom`](https://broom.tidymodels.org/) package, which summarizes key information about models in tidy `tibble()`s.
+
+`tidy()` produces a `tibble()` where each row contains information about an important component of the model. For regression models, this often corresponds to regression coefficients. This is can be useful if you want to inspect a model or create custom visualizations.
+
+```{r, message=FALSE}
+# Obtaining the estimated coefficients
+suppressWarnings(tidy(lr_workflow_fit)) 
+```
+
+If you want to get the odds ratio of each variable:
+
+```{r}
+# Obtaining the odds ratios
+suppressWarnings(tidy(lr_workflow_fit, exponentiate = TRUE))
+```
+
+`glance()` returns a tibble with exactly one row of goodness of fitness measures and related statistics. This is useful to check for model misspecification and to compare many models.
+
+```{r, message=FALSE}
+suppressWarnings(glance(lr_workflow_fit))
+```
+
+## Making predictions on the test data
+
+```{r, message=FALSE}
+# The predicted classes
+prediction_class <- lr_workflow_fit %>% 
+  predict(new_data = stroke_test,
+          type = 'class')
+
+head(prediction_class)
+```
+
+```{r, message=FALSE}
+# The predicted probability of each class
+prediction_prob <- lr_workflow_fit %>% 
+  predict(new_data = stroke_test,
+          type = 'prob')
+
+head(prediction_prob)
+```
+
+## Evaluating model performance on the test dataset: `yardstick`
+
+For reference, check the [`yardstick`](https://yardstick.tidymodels.org/) package, which provides metrics for evaluating the quality of model predictions.
+
+```{r, message=FALSE}
+# Combine test data with predictions
+test_results <- stroke_test %>% 
+  bind_cols(prediction_class, prediction_prob)
+
+head(test_results %>% select(stroke, `.pred_class`, `.pred_0`, `.pred_1`))
+```
+
+### Creating a metric set
+
+```{r, message=FALSE}
+# Collect the performance metrics
+custom_metrics <- metric_set(sens, spec, roc_auc)
+custom_metrics(test_results, truth = stroke, estimate = .pred_class, .pred_0)
+```
+
+### ROC curve
+
+```{r, message=FALSE}
+# Plot the ROC curve
+test_results %>% roc_curve(stroke, .pred_0) %>% autoplot()
+```
+
+## Feature importance
+
+To visualize the importance of each variable, you can use the [`vip`](https://koalaverse.github.io/vip/articles/vip.html) package.
+
+```{r, message=FALSE}
+lr_workflow_fit %>% 
+  extract_fit_parsnip() %>% 
+  vip::vip(num_features = 20)
+```
+
+## Save the workflow
+
+```{r}
+saveRDS(lr_workflow_fit, "stroke_lr_workflow.rds")
+```
+
+# Implement the model using `plumber`
+
+[`Plumber`](https://www.rplumber.io/) allows you to create a web API by merely decorating your existing R source code with roxygen2-like comments.
+
+To run `plumber`, you will need a separate `.R` file.
+
+```{r}
+# 'stroke_lr_plumber.R' is the location of the file shown above
+pr("stroke_lr_plumber.R") %>%
+  pr_run(port=8000)
+```
+
+To test the website you generated, input the below examples, and check the output:
+
+```{r}
+# Example 1
+ind <- 1
+
+t(test_results[ind, 1:10])
+
+cat(paste("===============", "\n"))
+cat(paste("The observed class:", test_results$.pred_class[ind], "\n"))
+cat(paste("===============", "\n"))
+cat(paste("The expected predicted class:", test_results$.pred_class[ind], "\n"))
+cat(paste("The expected probability for class 0:", round(test_results$.pred_0[ind], 3), "\n"))
+cat(paste("The expected probability for class 1:", round(test_results$.pred_1[ind], 3)))
+```
+
+```{r}
+# Example 2
+ind <- 100
+
+t(test_results[ind, 1:10])
+
+cat(paste("===============", "\n"))
+cat(paste("The observed class:", test_results$.pred_class[ind], "\n"))
+cat(paste("===============", "\n"))
+cat(paste("The expected predicted class:", test_results$.pred_class[ind], "\n"))
+cat(paste("The expected probability for class 0:", round(test_results$.pred_0[ind], 3), "\n"))
+cat(paste("The expected probability for class 1:", round(test_results$.pred_1[ind], 3)))
+```
+
+```{r}
+# Example 3
+ind <- 465
+
+t(test_results[ind, 1:10])
+
+cat(paste("===============", "\n"))
+cat(paste("The observed class:", test_results$.pred_class[ind], "\n"))
+cat(paste("===============", "\n"))
+cat(paste("The expected predicted class:", test_results$.pred_class[ind], "\n"))
+cat(paste("The expected probability for class 0:", round(test_results$.pred_0[ind], 3), "\n"))
+cat(paste("The expected probability for class 1:", round(test_results$.pred_1[ind], 3)))
+```

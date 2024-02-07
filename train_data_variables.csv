@@ -1,0 +1,12 @@
+variable,role,type,min,max,label
+gender,predictor,Categorical,,,F; M
+age,predictor,Continuous,40,100,
+hypertension,predictor,Categorical,,,No; Yes
+heart_disease,predictor,Categorical,,,No; Yes
+ever_married,predictor,Categorical,,,No; Yes
+work_type,predictor,Categorical,,,Self-employed; Private job; Government job
+Residence_type,predictor,Categorical,,,Rural; Urban
+avg_glucose_level,predictor,Continuous,0,310,
+bmi,predictor,Continuous,9,73,
+smoking_status,predictor,Categorical,,,Never smoked; Formerly smoked; Currently smokes
+stroke,outcome,Categorical,,,0; 1
