@@ -218,6 +218,19 @@ lr_workflow_fit %>%
   vip::vip(num_features = 20)
 ```
 
+## Calibration
+
+```{r}
+prediction <- test_results$.pred_1 # get the prediction probability
+outcome <- as.numeric(as.character(test_results$stroke)) # turn the factor into numerical
+
+CalibrationCurves::val.prob.ci.2(prediction, outcome)
+```
+
+```{r}
+rms::val.prob(prediction, outcome)
+```
+
 ## Save the workflow
 
 ```{r}
@@ -279,3 +292,8 @@ cat(paste("The expected predicted class:", test_results$.pred_class[ind], "\n"))
 cat(paste("The expected probability for class 0:", round(test_results$.pred_0[ind], 3), "\n"))
 cat(paste("The expected probability for class 1:", round(test_results$.pred_1[ind], 3)))
 ```
+
+```{r}
+
+```
+
