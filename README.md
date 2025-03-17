@@ -27,7 +27,7 @@ Demo and assignment materials for the AI4PH course: Developing and Deploying Tra
 1.	`train_data_variables.csv` (data dictionary of the train set). You’ll also use this to help you harmonize the validation data in the assignment.
 
 ## Assignment submission and office hour
-To submit your work on the assignment, please send us the assignment file with your code and all the output, you can find our emails on [Canvas](https://phesc.instructure.com/courses/234/users). Please rename the file as `AI4PH_assignment_YourName.Rmd`. E.g. my name is Juan Li and I will rename my submission as `AI4PH_assignment_JuanLi.Rmd`.
+To submit your work on the assignment, please send us the assignment file with your code and all the output, you can find our emails on [Canvas](https://phesc.instructure.com/courses/398). Please rename the file as `AI4PH_assignment_YourName.Rmd`. E.g. my name is Juan Li and I will rename my submission as `AI4PH_assignment_JuanLi.Rmd`.
 
 If you have any question, you are encouraged to join the office hour on Feburary 19th.
 
